@@ -10,8 +10,8 @@ const int midi_baud        = 31250;
 const int button_1         = 2;
 const int button_2         = 3;
 const int button_3         = 4;
-const int midi_channel     = 1; // todo: make it configurable
-const int midi_channel_bis = 2;
+const int midi_channel     = 0; // todo: make it configurable
+const int midi_channel_bis = 1;
 
 int midi_clock_tick_counter = 0;
 int sequence_step_counter = 0;
@@ -28,7 +28,6 @@ void noteOn(int channel, int pitch, int velocity) {
     Serial.write(pitch);
     Serial.write(velocity);
 }
-
 
 void reset_step_counter(){
     sequence_step_counter = 0;
@@ -47,12 +46,11 @@ void all_notes_off(int channel){
 void reset_sequencer(){
     reset_step_counter();
     reset_tick_counter();
-    all_notes_off(midi_channel);
-    all_notes_off(midi_channel_bis);
+    for(int i=0;i<16;i++){
+        all_notes_off(i);
+    }
     stopped = 1;
 }
-
-
 
 void step_tick(){
     midi_clock_tick_counter++;
@@ -73,40 +71,80 @@ void set_sequence_length(){
 }
 
 void set_split_note(){
-    split_note = map(analogRead(0), 0, 1023, 0, 127);
+    split_note = map(analogRead(0), 0, 1023, 24, 90);
 }
 
-
 void randomize_step(int step_number){
-    notes[step_number] = random(36, 80);
+    notes[step_number] = random(24, 90);
     slides[step_number] = random(1);
     velocities[step_number] = random(64, 127);
 }
 
+void shift_array_left(int a[16]){
+    int temp_val = a[0];
+    for(int i=1;i<15;i++){
+        a[i-1] = a[i]; 
+    }
+    a[15] = temp_val;
+}
+
+void shift_array_right(int a[16]){
+    int temp_val = a[15];
+    for(int i=15;i>0;i--){
+        a[i] = a[i-1];
+    }
+    a[0] = temp_val;
+}
+
+void shift_sequence_left(){
+    shift_array_left(notes);
+    shift_array_left(velocities);
+    shift_array_left(slides);
+}
+
+void shift_sequence_right(){
+    shift_array_right(notes);
+    shift_array_right(velocities);
+    shift_array_right(slides);
+}
 
 void setup(){
     pinMode(button_1,INPUT);
     pinMode(button_2,INPUT);
+    pinMode(button_3,INPUT);
     digitalWrite(button_1, HIGH);
     digitalWrite(button_2, HIGH);
+    digitalWrite(button_3, HIGH);
     Serial.begin(midi_baud);
     reset_sequencer();
+    for(int i=0;i<16;i++){
+        randomize_step(i);
+    }
 }
 
 void loop(){
     if(Serial.available() > 0){
         byte midi_byte = Serial.read();
         if(midi_byte == clock_stop){
+            Serial.write(midi_byte);
             reset_sequencer();
         }
         if(midi_byte == clock_start || midi_byte == clock_continue){
+            Serial.write(midi_byte);
             stopped = 0;
         }
-        if(!stopped){
-            if(midi_byte == clock_tick){
+        if(midi_byte == clock_tick){
+            Serial.write(midi_byte);
+            if(!stopped){
                 if(midi_clock_tick_counter == 0){
                     set_sequence_length();
                     set_split_note();
+                    if(digitalRead(button_1) == LOW){
+                        shift_sequence_left();
+                    }
+                    if(digitalRead(button_3) == LOW){
+                        shift_sequence_right();
+                    }
                     if(digitalRead(button_2) == LOW){
                         randomize_step(sequence_step_counter);
                     }
