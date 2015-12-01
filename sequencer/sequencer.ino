@@ -10,23 +10,56 @@ const int midi_baud        = 31250;
 const int button_1         = 2;
 const int button_2         = 3;
 const int button_3         = 4;
-const int midi_channel     = 0; // todo: make it configurable
+const int midi_channel     = 0;
 const int midi_channel_bis = 1;
+const int hi_note          = 84;
+const int lo_note          = 24;
+const int hi_velocity      = 127;
+const int lo_velocity      = 64;
 
 int midi_clock_tick_counter = 0;
 int sequence_step_counter = 0;
 int stopped = 1;
 int sequence_length = 8;
 int split_note = 64;
+int selected_scale = 0;
+int previous_note[3] = {0, 0, 0};
 
 int notes[16] = {80, 24, 57, 30, 36, 24, 57, 30, 36, 24, 57, 30, 36, 24, 57, 48};
 int velocities[16] = {64, 64, 64, 64, 64, 127, 64, 64, 64, 64, 127, 64, 64, 127, 64, 64};
 int slides[16] = {0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0};
+int rests[16] = {0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0};
+
+// C-based
+int harmonic_scale[128] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127};
+int major_scale[128] = {0,0,2,3,3,5,5,7,7,8,10,10,12,12,14,15,15,17,17,19,19,20,22,22,24,24,26,27,27,29,29,31,31,32,34,34,36,36,38,39,39,41,41,43,43,44,46,46,48,48,50,51,51,53,53,55,55,56,58,58,60,60,62,63,63,65,65,67,67,68,70,70,72,72,74,75,75,77,77,79,79,80,82,82,84,84,86,87,87,89,89,91,91,92,94,94,96,96,98,99,99,101,101,103,103,104,106,106,108,108,110,111,111,113,113,115,115,116,118,118,120,120,122,123,123,125,125,127};
+int minor_scale[128] = {0,0,2,2,4,5,5,7,7,9,9,11,12,12,14,14,16,17,17,19,19,21,21,23,24,24,26,26,28,29,29,31,31,33,33,35,36,36,38,38,40,41,41,43,43,45,45,47,48,48,50,50,52,53,53,55,55,57,57,59,60,60,62,62,64,65,65,67,67,69,69,71,72,72,74,74,76,77,77,79,79,81,81,83,84,84,86,86,88,89,89,91,91,93,93,95,96,96,98,98,100,101,101,103,103,105,105,107,108,108,110,110,112,113,113,115,115,117,117,119,120,120,122,122,124,125,125,127};
+int hirajoshi_scale[128] = {0,0,2,3,3,3,7,7,8,8,8,12,12,12,14,15,15,15,19,19,20,20,20,24,24,24,26,27,27,27,31,31,32,32,32,36,36,36,38,39,39,39,43,43,44,44,44,48,48,48,50,51,51,51,55,55,56,56,56,60,60,60,62,63,63,63,67,67,68,68,68,72,72,72,74,75,75,75,79,79,80,80,80,84,84,84,86,87,87,87,91,91,92,92,92,96,96,96,98,99,99,99,103,103,104,104,104,108,108,108,110,111,111,111,115,115,116,116,116,120,120,120,122,123,123,123,127,127};
+int hiwato_scale[128] = {0,1,1,1,5,5,6,6,6,10,10,10,12,13,13,13,17,17,18,18,18,22,22,22,24,25,25,25,29,29,30,30,30,34,34,34,36,37,37,37,41,41,42,42,42,46,46,46,48,49,49,49,53,53,54,54,54,58,58,58,60,61,61,61,65,65,66,66,66,70,70,70,72,73,73,73,77,77,78,78,78,82,82,82,84,85,85,85,89,89,90,90,90,94,94,94,96,97,97,97,101,101,102,102,102,106,106,106,108,109,109,109,113,113,114,114,114,118,118,118,120,121,121,121,125,125,126,126};
 
 void noteOn(int channel, int pitch, int velocity) {
     Serial.write(144 + channel);
-    Serial.write(pitch);
+    switch(selected_scale){
+        case 1:
+            Serial.write(major_scale[pitch]);
+            break;
+        case 2:
+            Serial.write(minor_scale[pitch]);
+            break;
+        case 3:
+            Serial.write(hirajoshi_scale[pitch]);
+            break;            
+        case 4:
+            Serial.write(hiwato_scale[pitch]);
+            break;                        
+        default:
+            Serial.write(pitch);      
+            break;
+    }
     Serial.write(velocity);
+    previous_note[0] = channel;
+    previous_note[1] = pitch;
+    previous_note[2] = velocity;
 }
 
 void reset_step_counter(){
@@ -71,13 +104,17 @@ void set_sequence_length(){
 }
 
 void set_split_note(){
-    split_note = map(analogRead(0), 0, 1023, 24, 90);
+    split_note = map(analogRead(0), 0, 1023, lo_note, hi_note);
 }
 
 void randomize_step(int step_number){
-    notes[step_number] = random(24, 90);
+    notes[step_number] = random(lo_note, hi_note);
     slides[step_number] = random(1);
-    velocities[step_number] = random(64, 127);
+    velocities[step_number] = random(lo_velocity, hi_velocity);
+}
+
+void randomize_scale(){
+    selected_scale = random(5);
 }
 
 void shift_array_left(int a[16]){
@@ -117,6 +154,7 @@ void setup(){
     digitalWrite(button_3, HIGH);
     Serial.begin(midi_baud);
     reset_sequencer();
+    randomize_scale();
     for(int i=0;i<16;i++){
         randomize_step(i);
     }
@@ -140,7 +178,7 @@ void loop(){
                     set_sequence_length();
                     set_split_note();
                     if(digitalRead(button_1) == LOW){
-                        shift_sequence_left();
+                        randomize_scale();
                     }
                     if(digitalRead(button_3) == LOW){
                         shift_sequence_right();
