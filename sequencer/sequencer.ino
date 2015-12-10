@@ -7,22 +7,20 @@ const byte note_on         = 144;
 const byte note_off        = 128;
 const int board_led        = 13;
 const int midi_baud        = 31250;
-const int button_1         = 2;
-const int button_2         = 3;
-const int button_3         = 4;
 const int midi_channel     = 0;
 const int midi_channel_bis = 1;
-const int hi_note          = 84;
-const int lo_note          = 24;
+
 const int hi_velocity      = 127;
 const int lo_velocity      = 64;
 
+int lo_note                 = 24;
+int hi_note                 = 84;
+int split_note              = 64;
 int midi_clock_tick_counter = 0;
-int sequence_step_counter = 0;
-int stopped = 1;
-int sequence_length = 8;
-int split_note = 64;
-int selected_scale = 0;
+int sequence_step_counter   = 0;
+int stopped                 = 1;
+int sequence_length         = 8;
+int selected_scale          = 0;
 
 int notes[16] = {80, 24, 57, 30, 36, 24, 57, 30, 36, 24, 57, 30, 36, 24, 57, 48};
 int velocities[16] = {64, 64, 64, 64, 64, 127, 64, 64, 64, 64, 127, 64, 64, 127, 64, 64};
@@ -37,26 +35,27 @@ int hirajoshi_scale[128] = {0,0,2,3,3,3,7,7,8,8,8,12,12,12,14,15,15,15,19,19,20,
 int hiwato_scale[128] = {0,1,1,1,5,5,6,6,6,10,10,10,12,13,13,13,17,17,18,18,18,22,22,22,24,25,25,25,29,29,30,30,30,34,34,34,36,37,37,37,41,41,42,42,42,46,46,46,48,49,49,49,53,53,54,54,54,58,58,58,60,61,61,61,65,65,66,66,66,70,70,70,72,73,73,73,77,77,78,78,78,82,82,82,84,85,85,85,89,89,90,90,90,94,94,94,96,97,97,97,101,101,102,102,102,106,106,106,108,109,109,109,113,113,114,114,114,118,118,118,120,121,121,121,125,125,126,126};
 
 void noteOn(int pitch, int velocity) {
-    if(notes[sequence_step_counter] > split_note){
+    int pitch_in_range = map(pitch, 0, 127, lo_note, hi_note);
+    if(pitch_in_range > split_note){
         Serial.write(144 + midi_channel_bis);
     }else{
         Serial.write(144 + midi_channel);
     }
     switch(selected_scale){
-        case 1:
-            Serial.write(major_scale[pitch]);
+        case 1: 
+            Serial.write(major_scale[pitch_in_range]);
             break;
         case 2:
-            Serial.write(minor_scale[pitch]);
+            Serial.write(minor_scale[pitch_in_range]);
             break;
         case 3:
-            Serial.write(hirajoshi_scale[pitch]);
+            Serial.write(hirajoshi_scale[pitch_in_range]);
             break;            
         case 4:
-            Serial.write(hiwato_scale[pitch]);
+            Serial.write(hiwato_scale[pitch_in_range]);
             break;                        
         default:
-            Serial.write(pitch);      
+            Serial.write(pitch_in_range);      
             break;
     }
     Serial.write(velocity);
@@ -122,22 +121,18 @@ void step_sequence(){
     }
 }
 
-void set_sequence_length(){
-    sequence_length = map(analogRead(1), 0, 1023, 1, 16);
-}
-
-void set_split_note(){
-    split_note = map(analogRead(0), 0, 1023, lo_note, hi_note);
+void gather_settings(){
+    lo_note = map(analogRead(0), 0, 1023, 0, 127);
+    hi_note = map(analogRead(1), 0, 1023, 0, 127);
+    split_note = map(analogRead(2), 0, 1023, 0, 127);
+    selected_scale = map(analogRead(3), 0, 1023, 0, 4);
+    sequence_length = map(analogRead(4), 0, 1023, 1, 16); 
 }
 
 void randomize_step(int step_number){
     notes[step_number] = random(lo_note, hi_note +1);
     velocities[step_number] = random(lo_velocity, hi_velocity + 1);
     step_type[step_number] = random(4);
-}
-
-void randomize_scale(){
-    selected_scale = random(6);
 }
 
 void shift_array_left(int a[16]){
@@ -169,16 +164,9 @@ void shift_sequence_right(){
 }
 
 void setup(){
-    pinMode(button_1,INPUT);
-    pinMode(button_2,INPUT);
-    pinMode(button_3,INPUT);
-    digitalWrite(button_1, HIGH);
-    digitalWrite(button_2, HIGH);
-    digitalWrite(button_3, HIGH);
     Serial.begin(midi_baud);
     randomSeed(analogRead(0));
     reset_sequencer();
-    randomize_scale();
     for(int i=0;i<16;i++){
         randomize_step(i);
     }
@@ -199,17 +187,7 @@ void loop(){
             Serial.write(midi_byte);
             if(!stopped){
                 if(midi_clock_tick_counter == 0){
-                    set_sequence_length();
-                    set_split_note();
-                    if(digitalRead(button_1) == LOW){
-                        randomize_scale();
-                    }
-                    if(digitalRead(button_3) == LOW){
-                        shift_sequence_right();
-                    }
-                    if(digitalRead(button_2) == LOW){
-                        randomize_step(sequence_step_counter);
-                    }
+                    gather_settings();
                     step_sequence();
                 }
                 step_tick();
