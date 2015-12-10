@@ -2,7 +2,6 @@ const byte clock_tick      = 248;
 const byte clock_start     = 250;
 const byte clock_stop      = 252;
 const byte clock_continue  = 251;
-const int clock_ppqn       = 6;
 const byte note_on         = 144;
 const byte note_off        = 128;
 const int board_led        = 13;
@@ -19,6 +18,7 @@ int split_note              = 64;
 int midi_clock_tick_counter = 0;
 int sequence_step_counter   = 0;
 int stopped                 = 1;
+int clock_ppqn              = 6;
 int sequence_length         = 8;
 int selected_scale          = 0;
 
@@ -37,28 +37,28 @@ int hiwato_scale[128] = {0,1,1,1,5,5,6,6,6,10,10,10,12,13,13,13,17,17,18,18,18,2
 void noteOn(int pitch, int velocity) {
     int pitch_in_range = map(pitch, 0, 127, lo_note, hi_note);
     if(pitch_in_range > split_note){
-        Serial.write(144 + midi_channel_bis);
+        Serial3.write(144 + midi_channel_bis);
     }else{
-        Serial.write(144 + midi_channel);
+        Serial3.write(144 + midi_channel);
     }
     switch(selected_scale){
         case 1: 
-            Serial.write(major_scale[pitch_in_range]);
+            Serial3.write(major_scale[pitch_in_range]);
             break;
         case 2:
-            Serial.write(minor_scale[pitch_in_range]);
+            Serial3.write(minor_scale[pitch_in_range]);
             break;
         case 3:
-            Serial.write(hirajoshi_scale[pitch_in_range]);
+            Serial3.write(hirajoshi_scale[pitch_in_range]);
             break;            
         case 4:
-            Serial.write(hiwato_scale[pitch_in_range]);
+            Serial3.write(hiwato_scale[pitch_in_range]);
             break;                        
         default:
-            Serial.write(pitch_in_range);      
+            Serial3.write(pitch_in_range);      
             break;
     }
-    Serial.write(velocity);
+    Serial3.write(velocity);
 }
 
 void reset_step_counter(){
@@ -70,9 +70,9 @@ void reset_tick_counter(){
 }
 
 void all_notes_off(int channel){
-    Serial.write(176 + channel);
-    Serial.write(123);
-    Serial.write(0);
+    Serial3.write(176 + channel);
+    Serial3.write(123);
+    Serial3.write(0);
 }
 
 void reset_sequencer(){
@@ -126,7 +126,24 @@ void gather_settings(){
     hi_note = map(analogRead(1), 0, 1023, 0, 127);
     split_note = map(analogRead(2), 0, 1023, 0, 127);
     selected_scale = map(analogRead(3), 0, 1023, 0, 4);
-    sequence_length = map(analogRead(4), 0, 1023, 1, 16); 
+    sequence_length = map(analogRead(4), 0, 1023, 1, 16);
+    int clock_divide = map(analogRead(5), 0, 1023, 0, 3);
+    switch(clock_divide){
+        case 0:
+            clock_ppqn = 24;
+            break;
+        case 1:
+            clock_ppqn = 12;
+            break;
+        case 2:
+            clock_ppqn = 6;
+            break;
+        case 3:
+            clock_ppqn = 3;
+            break;
+        default:
+            clock_ppqn = 6;
+    }
 }
 
 void randomize_step(int step_number){
@@ -164,7 +181,7 @@ void shift_sequence_right(){
 }
 
 void setup(){
-    Serial.begin(midi_baud);
+    Serial3.begin(midi_baud);
     randomSeed(analogRead(0));
     reset_sequencer();
     for(int i=0;i<16;i++){
@@ -173,21 +190,24 @@ void setup(){
 }
 
 void loop(){
-    if(Serial.available() > 0){
-        byte midi_byte = Serial.read();
+    if(Serial3.available() > 0){
+        byte midi_byte = Serial3.read();
         if(midi_byte == clock_stop){
-            Serial.write(midi_byte);
+            Serial3.write(midi_byte);
             reset_sequencer();
         }
         if(midi_byte == clock_start || midi_byte == clock_continue){
-            Serial.write(midi_byte);
+            Serial3.write(midi_byte);
             stopped = 0;
         }
         if(midi_byte == clock_tick){
-            Serial.write(midi_byte);
+            Serial3.write(midi_byte);
             if(!stopped){
                 if(midi_clock_tick_counter == 0){
                     gather_settings();
+                    if(map(analogRead(7), 0, 1023, 0, 1) == 1){
+                        randomize_step(sequence_step_counter);
+                    }
                     step_sequence();
                 }
                 step_tick();
