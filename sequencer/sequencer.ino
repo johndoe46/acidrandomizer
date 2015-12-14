@@ -1,16 +1,15 @@
-const byte clock_tick      = 248;
-const byte clock_start     = 250;
-const byte clock_stop      = 252;
-const byte clock_continue  = 251;
-const byte note_on         = 144;
-const byte note_off        = 128;
-const int board_led        = 13;
-const int midi_baud        = 31250;
-const int midi_channel     = 0;
-const int midi_channel_bis = 1;
-
-const int hi_velocity      = 127;
-const int lo_velocity      = 64;
+const byte clock_tick       = 248;
+const byte clock_start      = 250;
+const byte clock_stop       = 252;
+const byte clock_continue   = 251;
+const byte note_on          = 144;
+const byte note_off         = 128;
+const int board_led         = 13;
+const int midi_baud         = 31250;
+const int midi_channel      = 0;
+const int midi_channel_bis  = 1;
+const int hi_velocity       = 128;
+const int lo_velocity       = 64;
 
 int lo_note                 = 24;
 int hi_note                 = 84;
@@ -21,11 +20,13 @@ int stopped                 = 1;
 int clock_ppqn              = 6;
 int sequence_length         = 8;
 int selected_scale          = 0;
+int sequence_density        = 0;
+int freeze_probability      = 0;
+int max_freeze_probability  = 64;
 
-int notes[16] = {80, 24, 57, 30, 36, 24, 57, 30, 36, 24, 57, 30, 36, 24, 57, 48};
-int velocities[16] = {64, 64, 64, 64, 64, 127, 64, 64, 64, 64, 127, 64, 64, 127, 64, 64};
-// 0 = note, 1 = tie, 2 = slide, 3 = rest
-int step_type[16] = {0, 0, 2, 0, 3, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0};
+int notes[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+int velocities[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+int step_type[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};// 0 = note, 1 = tie, 2 = slide, 3 = rest
 
 // C-based
 int harmonic_scale[128] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127};
@@ -35,48 +36,49 @@ int hirajoshi_scale[128] = {0, 0, 2, 3, 3, 3, 7, 7, 8, 8, 8, 12, 12, 12, 14, 15,
 int hiwato_scale[128] = {0, 1, 1, 1, 5, 5, 6, 6, 6, 10, 10, 10, 12, 13, 13, 13, 17, 17, 18, 18, 18, 22, 22, 22, 24, 25, 25, 25, 29, 29, 30, 30, 30, 34, 34, 34, 36, 37, 37, 37, 41, 41, 42, 42, 42, 46, 46, 46, 48, 49, 49, 49, 53, 53, 54, 54, 54, 58, 58, 58, 60, 61, 61, 61, 65, 65, 66, 66, 66, 70, 70, 70, 72, 73, 73, 73, 77, 77, 78, 78, 78, 82, 82, 82, 84, 85, 85, 85, 89, 89, 90, 90, 90, 94, 94, 94, 96, 97, 97, 97, 101, 101, 102, 102, 102, 106, 106, 106, 108, 109, 109, 109, 113, 113, 114, 114, 114, 118, 118, 118, 120, 121, 121, 121, 125, 125, 126, 126};
 
 int density_map[17][16] = {
-  {0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0},
-  {0, 0, 1, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0},
-  {0, 0, 1, 0,  0, 0, 0, 0,  0, 0, 1, 0,  0, 0, 0, 0},
-  {0, 0, 1, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 0},
-  {0, 0, 1, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 1, 0, 0},
-  {0, 0, 1, 0,  0, 1, 1, 0,  0, 0, 1, 0,  0, 1, 0, 0},
-  {0, 0, 1, 0,  0, 1, 1, 0,  0, 0, 1, 0,  0, 1, 1, 0},
-  {0, 0, 1, 1,  0, 1, 1, 0,  0, 0, 1, 0,  0, 1, 1, 0},
-  {0, 0, 1, 1,  0, 1, 1, 0,  0, 0, 1, 1,  0, 1, 1, 0},
-  {0, 0, 1, 1,  0, 1, 1, 0,  0, 0, 1, 1,  0, 1, 1, 1},
-  {0, 0, 1, 1,  0, 1, 1, 0,  0, 1, 1, 1,  0, 1, 1, 1},
-  {0, 1, 1, 1,  0, 1, 1, 0,  0, 1, 1, 1,  0, 1, 1, 1},
-  {0, 1, 1, 1,  0, 1, 1, 1,  0, 1, 1, 1,  0, 1, 1, 1},
-  {1, 1, 1, 1,  0, 1, 1, 1,  0, 1, 1, 1,  0, 1, 1, 1},
-  {1, 1, 1, 1,  0, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1},
-  {1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1},
-  {1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1},
+  {0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0    },
+  {0, 0, 1, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0    },
+  {0, 0, 1, 0,  0, 0, 0, 0,  0, 0, 1, 0,  0, 0, 0, 0    },
+  {0, 0, 1, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 0    },
+  {0, 0, 1, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 1, 0, 0    },
+  {0, 0, 1, 0,  0, 1, 1, 0,  0, 0, 1, 0,  0, 1, 0, 0    },
+  {0, 0, 1, 0,  0, 1, 1, 0,  0, 0, 1, 0,  0, 1, 1, 0    },
+  {0, 0, 1, 1,  0, 1, 1, 0,  0, 0, 1, 0,  0, 1, 1, 0    },
+  {0, 0, 1, 1,  0, 1, 1, 0,  0, 0, 1, 1,  0, 1, 1, 0    },
+  {0, 0, 1, 1,  0, 1, 1, 0,  0, 0, 1, 1,  0, 1, 1, 1    },
+  {0, 0, 1, 1,  0, 1, 1, 0,  0, 1, 1, 1,  0, 1, 1, 1    },
+  {0, 1, 1, 1,  0, 1, 1, 0,  0, 1, 1, 1,  0, 1, 1, 1    },
+  {0, 1, 1, 1,  0, 1, 1, 1,  0, 1, 1, 1,  0, 1, 1, 1    },
+  {1, 1, 1, 1,  0, 1, 1, 1,  0, 1, 1, 1,  0, 1, 1, 1    },
+  {1, 1, 1, 1,  0, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1    },
+  {1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1    },
+  {1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1    },
 };
 
 void noteOn(int pitch, int velocity) {
   int pitch_in_range = map(pitch, 0, 127, lo_note, hi_note);
   if (pitch_in_range > split_note) {
     Serial3.write(144 + midi_channel_bis);
-  } else {
+  } 
+  else {
     Serial3.write(144 + midi_channel);
   }
   switch (selected_scale) {
-    case 1:
-      Serial3.write(major_scale[pitch_in_range]);
-      break;
-    case 2:
-      Serial3.write(minor_scale[pitch_in_range]);
-      break;
-    case 3:
-      Serial3.write(hirajoshi_scale[pitch_in_range]);
-      break;
-    case 4:
-      Serial3.write(hiwato_scale[pitch_in_range]);
-      break;
-    default:
-      Serial3.write(pitch_in_range);
-      break;
+  case 1:
+    Serial3.write(major_scale[pitch_in_range]);
+    break;
+  case 2:
+    Serial3.write(minor_scale[pitch_in_range]);
+    break;
+  case 3:
+    Serial3.write(hirajoshi_scale[pitch_in_range]);
+    break;
+  case 4:
+    Serial3.write(hiwato_scale[pitch_in_range]);
+    break;
+  default:
+    Serial3.write(pitch_in_range);
+    break;
   }
   Serial3.write(velocity);
 }
@@ -111,29 +113,45 @@ void step_tick() {
   }
 }
 
+int dice_randomize(){
+  if(freeze_probability != max_freeze_probability && random(0, freeze_probability) == 0){
+    return 1;
+  }
+  return 0;
+}
 
+int get_step_type(){
+  if(density_map[sequence_density][sequence_step_counter] > 0){
+    return 0;
+  }else{
+    return step_type[sequence_step_counter];
+  }
+}
 
 void step_sequence() {
+  if(dice_randomize() > 0){
+    randomize_step(sequence_step_counter);
+  }
   // 0 = note, 1 = tie, 2 = slide, 3 = rest
-  switch (step_type[sequence_step_counter]) {
-    case 0:
-      // stop previous notes, play note
-      all_notes_off(midi_channel);
-      all_notes_off(midi_channel_bis);
-      noteOn(notes[sequence_step_counter], velocities[sequence_step_counter]);
-      break;
-    case 1:
-      // do nothing
-      break;
-    case 2:
-      // don't stop previous notes, play note
-      noteOn(notes[sequence_step_counter], velocities[sequence_step_counter]);
-      break;
-    case 3:
-      // stop notes
-      all_notes_off(midi_channel);
-      all_notes_off(midi_channel_bis);
-      break;
+  switch (get_step_type()) {
+  case 0:
+    // stop previous notes, play note
+    all_notes_off(midi_channel);
+    all_notes_off(midi_channel_bis);
+    noteOn(notes[sequence_step_counter], velocities[sequence_step_counter]);
+    break;
+  case 1:
+    // do nothing
+    break;
+  case 2:
+    // don't stop previous notes, play note
+    noteOn(notes[sequence_step_counter], velocities[sequence_step_counter]);
+    break;
+  case 3:
+    // stop notes
+    all_notes_off(midi_channel);
+    all_notes_off(midi_channel_bis);
+    break;
   }
   sequence_step_counter++;
   if (sequence_step_counter >= sequence_length) {
@@ -142,39 +160,43 @@ void step_sequence() {
 }
 
 void gather_settings() {
-  lo_note = map(analogRead(0), 0, 1023, 0, 127);
-  hi_note = map(analogRead(1), 0, 1023, 0, 127);
-  split_note = map(analogRead(2), 0, 1023, 0, 127);
-  selected_scale = map(analogRead(3), 0, 1023, 0, 4);
-  sequence_length = map(analogRead(4), 0, 1023, 1, 16);
-  int clock_divide = map(analogRead(5), 0, 1023, 0, 3);
+  lo_note            = map(analogRead(0), 0, 1023, 0, 127);
+  hi_note            = map(analogRead(1), 0, 1023, 0, 127);
+  split_note         = map(analogRead(2), 0, 1023, 0, 127);
+  selected_scale     = map(analogRead(3), 0, 1023, 0, 4);
+  sequence_length    = map(analogRead(4), 0, 1023, 1, 16);
+  sequence_density   = map(analogRead(6), 0, 1023, 0, 16);
+  freeze_probability = map(analogRead(7), 0, 1023, 0, max_freeze_probability);
+  
+  int clock_divide   = map(analogRead(5), 0, 1023, 0, 3);
   switch (clock_divide) {
-    case 0:
-      clock_ppqn = 24;
-      break;
-    case 1:
-      clock_ppqn = 12;
-      break;
-    case 2:
-      clock_ppqn = 6;
-      break;
-    case 3:
-      clock_ppqn = 3;
-      break;
-    default:
-      clock_ppqn = 6;
+  case 0:
+    clock_ppqn = 24;
+    break;
+  case 1:
+    clock_ppqn = 12;
+    break;
+  case 2:
+    clock_ppqn = 6;
+    break;
+  case 3:
+    clock_ppqn = 3;
+    break;
+  default:
+    clock_ppqn = 6;
   }
 }
 
 void randomize_step(int step_number) {
-  notes[step_number] = random(lo_note, hi_note + 1);
+  notes[step_number] = random(0, 128);
   velocities[step_number] = random(lo_velocity, hi_velocity + 1);
   step_type[step_number] = random(4);
 }
 
 void setup() {
   Serial3.begin(midi_baud);
-  randomSeed(analogRead(0));
+  Serial.begin(9600);
+  randomSeed(analogRead(10));
   reset_sequencer();
   for (int i = 0; i < 16; i++) {
     randomize_step(i);
@@ -182,7 +204,7 @@ void setup() {
 }
 
 void loop() {
-  while (Serial3.available() > 0) {
+  if(Serial3.available() > 0) {
     byte midi_byte = Serial3.read();
     if (midi_byte == clock_stop) {
       Serial3.write(midi_byte);
@@ -197,9 +219,6 @@ void loop() {
       if (!stopped) {
         if (midi_clock_tick_counter == 0) {
           gather_settings();
-          if (map(analogRead(7), 0, 1023, 0, 1) == 1) {
-            randomize_step(sequence_step_counter);
-          }
           step_sequence();
         }
         step_tick();
@@ -207,3 +226,5 @@ void loop() {
     }
   }
 }
+
+
