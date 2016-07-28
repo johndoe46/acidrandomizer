@@ -23,6 +23,7 @@ int selected_scale          = 0;
 int sequence_density        = 0;
 int freeze_probability      = 0;
 int max_freeze_probability  = 64;
+int spit_notes              = 1;
 
 int notes[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 int velocities[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -37,7 +38,7 @@ int hirajoshi_scale[128] = {0, 0, 2, 3, 3, 3, 7, 7, 8, 8, 8, 12, 12, 12, 14, 15,
 int hiwato_scale[128] = {0, 1, 1, 1, 5, 5, 6, 6, 6, 10, 10, 10, 12, 13, 13, 13, 17, 17, 18, 18, 18, 22, 22, 22, 24, 25, 25, 25, 29, 29, 30, 30, 30, 34, 34, 34, 36, 37, 37, 37, 41, 41, 42, 42, 42, 46, 46, 46, 48, 49, 49, 49, 53, 53, 54, 54, 54, 58, 58, 58, 60, 61, 61, 61, 65, 65, 66, 66, 66, 70, 70, 70, 72, 73, 73, 73, 77, 77, 78, 78, 78, 82, 82, 82, 84, 85, 85, 85, 89, 89, 90, 90, 90, 94, 94, 94, 96, 97, 97, 97, 101, 101, 102, 102, 102, 106, 106, 106, 108, 109, 109, 109, 113, 113, 114, 114, 114, 118, 118, 118, 120, 121, 121, 121, 125, 125, 126, 126};
 int density_map[17][16] = {
   {0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0    },
-  {0, 0, 1, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0    },
+  {0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0    },
   {0, 0, 1, 0,  0, 0, 0, 0,  0, 0, 1, 0,  0, 0, 0, 0    },
   {0, 0, 1, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 0    },
   {0, 0, 1, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 1, 0, 0    },
@@ -124,6 +125,9 @@ int dice_randomize(){
 }
 
 int get_step_type(){
+  /*if(sequence_density == 0){
+    return 3;
+  }*/
   if(density_map[sequence_density][sequence_step_counter] > 0){
     return 0;
   }else{
@@ -135,26 +139,28 @@ void step_sequence() {
   if(dice_randomize() > 0){
     randomize_step(sequence_step_counter);
   }
-  // 0 = note, 1 = tie, 2 = slide, 3 = rest
-  switch (get_step_type()) {
-  case 0:
-    // stop previous notes, play note
-    all_notes_off(midi_channel);
-    all_notes_off(midi_channel_bis);
-    noteOn(notes[sequence_step_counter], velocities[sequence_step_counter]);
-    break;
-  case 1:
-    // do nothing
-    break;
-  case 2:
-    // don't stop previous notes, play note
-    noteOn(notes[sequence_step_counter], velocities[sequence_step_counter]);
-    break;
-  case 3:
-    // stop notes
-    all_notes_off(midi_channel);
-    all_notes_off(midi_channel_bis);
-    break;
+  if(spit_notes == 1){
+    // 0 = note, 1 = tie, 2 = slide, 3 = rest
+    switch (get_step_type()) {
+    case 0:
+      // stop previous notes, play note
+      all_notes_off(midi_channel);
+      all_notes_off(midi_channel_bis);
+      noteOn(notes[sequence_step_counter], velocities[sequence_step_counter]);
+      break;
+    case 1:
+      // do nothing
+      break;
+    case 2:
+      // don't stop previous notes, play note
+      noteOn(notes[sequence_step_counter], velocities[sequence_step_counter]);
+      break;
+    case 3:
+      // stop notes
+      all_notes_off(midi_channel);
+      all_notes_off(midi_channel_bis);
+      break;
+    }
   }
   sequence_step_counter++;
   if (sequence_step_counter >= sequence_length) {
@@ -163,14 +169,29 @@ void step_sequence() {
 }
 
 void gather_settings() {
+  analogRead(0);
   lo_note            = map(analogRead(0), 0, 1023, 0, 127);
+  analogRead(1);
   hi_note            = map(analogRead(1), 0, 1023, 0, 127);
+  analogRead(2);
   split_note         = map(analogRead(2), 0, 1023, 0, 127);
+  analogRead(3);
   selected_scale     = map(analogRead(3), 0, 1023, 0, 5);
+  analogRead(4);
   sequence_length    = map(analogRead(4), 0, 1023, 1, 16);
+  analogRead(6);
   sequence_density   = map(analogRead(6), 0, 1023, 0, 16);
+  if(sequence_density == 0 && spit_notes == 1){
+    spit_notes = 0;
+    all_notes_off(midi_channel);
+    all_notes_off(midi_channel_bis);
+  }
+  if(sequence_density > 0 && spit_notes == 0){
+    spit_notes = 1;
+  }
+  analogRead(7);
   freeze_probability = map(analogRead(7), 0, 1023, 0, max_freeze_probability);
-  
+  analogRead(5);
   int clock_divide   = map(analogRead(5), 0, 1023, 0, 3);
   switch (clock_divide) {
   case 0:
